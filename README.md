@@ -1,7 +1,7 @@
 # EGMF-NET
 
-The final gated configuration for document image enhancement and binarization.
-This release contains one architecture and separate training/testing programs.
+EGMF-NET uses gated fusion for document image enhancement and binarization,
+with separate training and testing entry points.
 
 [中文说明](README.zh-CN.md)
 
@@ -16,7 +16,7 @@ This release contains one architecture and separate training/testing programs.
 
 The default two-stage shared network has **12,758,948 trainable parameters**.
 
-Cascade settings remain available in `conf.yml`:
+Configure cascade stages and parameter sharing in `conf.yml`:
 
 ```yaml
 model:
@@ -52,16 +52,15 @@ data/
 ```
 
 An image and its target files must have identical filename stems and dimensions.
-PNG, JPEG, BMP and TIFF are supported. Duplicate stems or missing targets raise
-an error rather than silently removing documents.
+PNG, JPEG, BMP and TIFF are supported. Use unique filename stems and provide
+the corresponding targets for each training image.
 
-The loader reads **every document in the configured training directory**. It
-does not reserve a validation subset or automatically exclude a dataset year.
-Prepare training and test directories separately; for a held-out DIBCO year,
-put that year's pages only in the test directories.
+Manually organize the data into separate training and test directories.
+For a held-out DIBCO year, place that year's pages in the test directories
+and the remaining years in the training directories.
 
 Set `data.train_enhance_gt_dir: ""` to use the input RGB as the enhancement target.
-This is a reconstruction objective, not a replacement for clean enhancement GT.
+This trains RGB reconstruction.
 Set `data.test_gt_dir: ""` to predict without computing test metrics.
 
 ## Training
@@ -76,9 +75,7 @@ The equivalent standalone entry point is `python train.py`. Relative paths are
 resolved against the project directory, independently of the working directory.
 An alternate configuration can optionally be selected with `--config` on `main.py`.
 
-Training uses all supplied documents, a 512×512 global image and 256×256 local
-patches by default. There is **no validation loader, validation metric or best
-validation checkpoint**.
+Training uses a 512×512 global image and 256×256 local patches by default.
 
 The final optimizer is AdamW (betas 0.9/0.999), with cosine learning rate from
 `train.lr` toward `train.lr_end`. The default run lasts 60 epochs with batch
@@ -107,10 +104,10 @@ Outputs in `train.save_dir`:
 | `log.txt` | epoch summaries |
 
 Resume by setting `train.resume_path` to a release checkpoint. `max_epochs` is
-the total target epoch count, not the number of additional epochs. Optimizer
+the total target epoch count. Optimizer
 moments and random states are restored; the current configuration determines
 the cosine schedule and weight decay. Changing the total epoch count changes
-the future cosine schedule. Changing the cascade count or sharing during resume is rejected. Exact resumption was tested on CPU with zero workers.
+the future cosine schedule. Keep the checkpoint's cascade count and sharing settings when resuming.
 
 ## Testing
 
@@ -129,8 +126,7 @@ For a raw state dictionary without metadata, the current YAML cascade settings a
 
 Outputs are saved under `test.save_dir/binary`, `probability` and `enhanced`.
 If GT is supplied, `metrics.csv` reports per-document FM, pFM, PSNR and DRD;
-`metrics.json` contains their document means. Testing is independent of training
-and never selects or updates training checkpoints.
+`metrics.json` contains their document means.
 
 Original final **gated/shared/RGB/interpolate** state dictionaries can be loaded
 for inference. Four tensors from the original unused conv-fusion heads are
@@ -163,5 +159,5 @@ Tests cover complete training data usage, strict pairing, rejected obsolete
 configuration, gradient coverage, training/resume equivalence and separate
 testing. During release preparation, both cascade-stage outputs, loss values and
 native-page tiled inference were compared with the original selected gated code.
-They matched with the same input tensors and weights. These synthetic checks do
-not constitute a new dataset accuracy evaluation.
+They matched with the same input tensors and weights. Verification used synthetic
+inputs on CPU; resume equivalence was checked with zero data-loader workers.
