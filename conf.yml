@@ -1,0 +1,38 @@
+# Run python main.py. Set mode to train or test.
+mode: train
+
+data:
+  train_img_dir: data/train/img
+  train_gt_dir: data/train/gt
+  # RGB enhancement targets with matching filenames. Empty uses the input RGB.
+  train_enhance_gt_dir: data/train/enhancement
+  test_img_dir: data/test/img
+  # Empty permits prediction without reporting test metrics.
+  test_gt_dir: data/test/gt
+
+train:
+  save_dir: checkpoints/egmf_gated
+  resume_path: ""
+  batch_size: 4
+  max_epochs: 60
+  patch_size: 256
+  full_image_size: 512
+  patch_stride: 256
+  lr: 0.0001
+  lr_end: 0.00005
+  weight_decay: 0.0
+  augment: false
+  save_every: 10
+
+test:
+  checkpoint_path: checkpoints/egmf_gated/model_last.pth
+  save_dir: results/egmf_gated
+  tile_size: 256
+  tile_overlap: 128
+  binary_threshold: 0.5
+
+runtime:
+  seed: 42
+  device: auto
+  num_workers: 0
+  use_amp: false
