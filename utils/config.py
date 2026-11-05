@@ -48,7 +48,8 @@ def validate_config(config):
             raise ValueError(f"train.{key} must be finite and nonnegative")
     if not 0 < train["lr"] or train["lr_end"] > train["lr"]:
         raise ValueError("Require 0 <= lr_end <= lr and lr > 0")
-    if not 0 <= float(test["binary_threshold"]) <= 1:
+    test["binary_threshold"] = float(test["binary_threshold"])
+    if not 0 <= test["binary_threshold"] <= 1:
         raise ValueError("binary_threshold must be in [0,1]")
     for section, key in (("train", "augment"), ("runtime", "use_amp")):
         if type(config[section][key]) is not bool:
