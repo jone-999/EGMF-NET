@@ -14,8 +14,7 @@ This release contains one architecture and separate training/testing programs.
 - Configurable cascade stages with shared or independent parameters. The enhanced result feeds the next stage.
 - Bilinear interpolation with a 1×1 projection performs decoder upsampling.
 
-The default two-stage shared network has **12,758,948 trainable parameters**. Alternative fusion,
-encoder, decoder and bottleneck variants are intentionally absent.
+The default two-stage shared network has **12,758,948 trainable parameters**.
 
 Cascade settings remain available in `conf.yml`:
 
