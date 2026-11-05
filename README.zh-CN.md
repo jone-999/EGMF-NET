@@ -33,7 +33,6 @@ model:
 ## 训练
 
 手动将数据分为训练和测试目录，并在 `conf.yml` 中配置路径。
-例如测试 DIBCO2019 时，将 2019 年数据放入测试目录，其他年份数据放入训练目录。
 
 每张训练图与 GT、增强 GT 的文件名主干、图像尺寸必须一致。
 `train_enhance_gt_dir: ""` 表示用输入 RGB 本身作为监督，训练 RGB 重建。
@@ -49,10 +48,11 @@ model:
 | `lr` / `lr_end` | AdamW 余弦学习率起始/结束值 |
 | `weight_decay` | AdamW 权重衰减 |
 | `augment` | 是否增强，默认关闭 |
-| `save_every` | 每隔多少轮保存一次，末轮总会保存 |
+| `save_every` | 权重保存间隔，默认每 10 轮一次，末轮也保存 |
 | `resume_path` | 发布版完整断点路径，空值表示从头训练 |
 
 输出目录包含 `model_last.pth`、`model_epochNNN.pth`、训练损失 CSV/曲线、实际配置和训练文件清单。
+两种权重文件均按 `save_every` 间隔及末轮保存，`model_last.pth` 指向最近一次保存的断点。
 
 ## 独立测试
 

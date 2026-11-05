@@ -56,8 +56,6 @@ PNG, JPEG, BMP and TIFF are supported. Use unique filename stems and provide
 the corresponding targets for each training image.
 
 Manually organize the data into separate training and test directories.
-For a held-out DIBCO year, place that year's pages in the test directories
-and the remaining years in the training directories.
 
 Set `data.train_enhance_gt_dir: ""` to use the input RGB as the enhancement target.
 This trains RGB reconstruction.
@@ -94,9 +92,12 @@ Other stage counts use equal stage weights. Loss coefficients are fixed in the m
 
 Outputs in `train.save_dir`:
 
+Set `train.save_every` to the checkpoint interval in epochs (default: 10).
+Both checkpoint files are saved at that interval and at the final epoch.
+
 | File | Contents |
 |---|---|
-| `model_last.pth` | latest complete training checkpoint |
+| `model_last.pth` | latest saved training checkpoint |
 | `model_epochNNN.pth` | periodic checkpoint and final-epoch checkpoint |
 | `loss_history.csv`, `history.json` | training losses and learning rate |
 | `loss_curve.png` | training loss curve |

@@ -135,6 +135,22 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             load_weights(small_model(), state)
 
+    def test_checkpoint_interval_and_final_epoch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root, config = self.make_case(folder)
+            config["train"].update(max_epochs=3, save_every=2)
+            saved_epochs = []
+            save = torch.save
+
+            def record_save(checkpoint, path):
+                saved_epochs.append((checkpoint["epoch"], Path(path).name))
+                save(checkpoint, path)
+
+            with patch("train.EGMFNet", side_effect=small_model), patch("train.torch.save", side_effect=record_save):
+                train(config)
+            self.assertEqual(saved_epochs, [(2, "model_last.pth"), (2, "model_epoch002.pth"),
+                                            (3, "model_last.pth"), (3, "model_epoch003.pth")])
+
     def test_training_resume_matches_uninterrupted_and_separate_testing(self):
         with tempfile.TemporaryDirectory() as folder:
             root, config = self.make_case(folder)

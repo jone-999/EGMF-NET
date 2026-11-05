@@ -143,8 +143,8 @@ def train(config):
                       "optimizer_state_dict": optimizer.state_dict(), "scaler_state_dict": scaler.state_dict(),
                       "epoch": epoch, "global_step": global_step, "history": history, "config": config,
                       "documents": manifest, "rng": capture_rng(), "loader_rng": generator.get_state()}
-        torch.save(checkpoint, output / "model_last.pth")
         if epoch % cfg["save_every"] == 0 or epoch == cfg["max_epochs"]:
+            torch.save(checkpoint, output / "model_last.pth")
             torch.save(checkpoint, output / f"model_epoch{epoch:03d}.pth")
         summary = f"epoch={epoch} lr={lr:.8g} loss={row['train_loss']:.6f}"
         print(summary)
