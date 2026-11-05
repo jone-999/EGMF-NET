@@ -11,11 +11,22 @@ This release contains one architecture and separate training/testing programs.
 - MSCAN encoders, GroupNorm, and EMCAD-Lite decoders.
 - Enhancement decoder features guide the binary decoders through addition.
 - Feature gates fuse global/local binary logits and RGB enhancements.
-- Two cascade stages reuse the same parameters. The enhanced result feeds the next stage.
+- Configurable cascade stages with shared or independent parameters. The enhanced result feeds the next stage.
 - Bilinear interpolation with a 1×1 projection performs decoder upsampling.
 
-The default network has **12,758,948 trainable parameters**. Alternative fusion,
-encoder, decoder, bottleneck and cascade variants are intentionally absent.
+The default two-stage shared network has **12,758,948 trainable parameters**. Alternative fusion,
+encoder, decoder and bottleneck variants are intentionally absent.
+
+Cascade settings remain available in `conf.yml`:
+
+```yaml
+model:
+  dual_cascade_stages: 2
+  independent_cascade_params: false
+```
+
+`false` shares parameters across stages; `true` gives each stage its own parameters.
+The stage count must be a positive integer. Independent stages increase model size and memory use.
 
 ## Installation
 
@@ -82,8 +93,8 @@ Per-stage loss is:
 + 0.3 × L1(enhanced_fused) + 0.1 × L1(enhanced_global) + 0.1 × L1(enhanced_local)
 ```
 
-`binary = BCEWithLogits + Dice`; cascade stages 1/2 are weighted 0.3/0.7.
-These weights and architecture choices are fixed in the model code.
+`binary = BCEWithLogits + Dice`; two cascade stages are weighted 0.3/0.7.
+Other stage counts use equal stage weights. Loss coefficients are fixed in the model code.
 
 Outputs in `train.save_dir`:
 
@@ -100,7 +111,7 @@ Resume by setting `train.resume_path` to a release checkpoint. `max_epochs` is
 the total target epoch count, not the number of additional epochs. Optimizer
 moments and random states are restored; the current configuration determines
 the cosine schedule and weight decay. Changing the total epoch count changes
-the future cosine schedule. Exact resumption was tested on CPU with zero workers.
+the future cosine schedule. Changing the cascade count or sharing during resume is rejected. Exact resumption was tested on CPU with zero workers.
 
 ## Testing
 
@@ -113,7 +124,8 @@ python test.py
 ```
 
 Testing processes native-size pages with a resized global view and overlapping
-local tiles. It uses the same feature-gated fusion and two shared cascade stages.
+local tiles. The stage count and parameter sharing are restored from checkpoint metadata.
+For a raw state dictionary without metadata, the current YAML cascade settings are used.
 `test.binary_threshold` controls the final foreground decision.
 
 Outputs are saved under `test.save_dir/binary`, `probability` and `enhanced`.

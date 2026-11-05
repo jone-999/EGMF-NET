@@ -13,12 +13,13 @@ from datasets.documentloader import DocumentDataset, paired_documents, axis_star
 from model import EGMFNet, compute_loss
 from utils.config import load_config, validate_config
 from utils.checkpoint import load_weights
+from utils.checkpoint import cascade_config, FORMAT
 from train import train
 from test import run_test
 
 
-def small_model():
-    return EGMFNet(base_channels=4, channels=(8, 16, 32, 32))
+def small_model(**kwargs):
+    return EGMFNet(base_channels=4, channels=(8, 16, 32, 32), **kwargs)
 
 
 class ReleaseTests(unittest.TestCase):
@@ -50,13 +51,56 @@ class ReleaseTests(unittest.TestCase):
         config = load_config()
         for section, key, value in (("train", "val_ratio", 0.2), ("train", "optimizer", "sgd"),
                                     ("train", "augment", "false"), ("train", "patch_stride", 512),
-                                    ("test", "tile_overlap", 256)):
+                                    ("test", "tile_overlap", 256),
+                                    ("model", "dual_cascade_stages", 0),
+                                    ("model", "independent_cascade_params", "false")):
             changed = deepcopy(config)
             changed[section][key] = value
             with self.assertRaises(ValueError):
                 validate_config(changed)
         with self.assertRaises(ValueError):
             axis_starts(800, 256, 400)
+
+    def test_cascade_counts_sharing_and_gradients(self):
+        for stages, independent in ((1, False), (3, False), (2, True)):
+            with self.subTest(stages=stages, independent=independent):
+                model = small_model(stages=stages, independent_cascade_params=independent)
+                if stages > 1:
+                    first = next(model.get_stage_model(0).parameters())
+                    second = next(model.get_stage_model(1).parameters())
+                    self.assertEqual(first is second, not independent)
+                output = model(torch.randn(1, 3, 64, 64), torch.randn(1, 3, 32, 32),
+                               torch.tensor([[0, 0, 32, 32, 32, 32]], dtype=torch.float32))
+                self.assertEqual(len(output["stage_outputs"]), stages)
+                losses = compute_loss(output, torch.zeros(1, 1, 32, 32), torch.rand(1, 3, 32, 32),
+                                      torch.zeros(1, 1, 64, 64), torch.rand(1, 3, 64, 64))
+                losses["loss_total"].backward()
+                self.assertTrue(all(p.grad is not None for p in model.parameters()))
+        self.assertEqual(cascade_config({"format": FORMAT, "config": {}}),
+                         {"dual_cascade_stages": 2, "independent_cascade_params": False})
+
+    def test_independent_cascade_training_and_checkpoint_inference(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root, config = self.make_case(folder)
+            config["model"]["independent_cascade_params"] = True
+            config["train"]["max_epochs"] = 1
+            with patch("train.EGMFNet", side_effect=small_model):
+                train(config)
+            checkpoint = torch.load(root / "out" / "model_last.pth", map_location="cpu", weights_only=False)
+            self.assertTrue(checkpoint["config"]["model"]["independent_cascade_params"])
+            self.assertTrue(any(key.startswith("cascade_stage_models.1.") for key in checkpoint["model_state_dict"]))
+            config["mode"] = "test"
+            config["test"]["checkpoint_path"] = str(root / "out" / "model_last.pth")
+            # Inference reconstructs the trained checkpoint, even if the
+            # current YAML's sharing setting was subsequently changed.
+            config["model"]["independent_cascade_params"] = False
+            with patch("test.EGMFNet", side_effect=small_model) as constructor:
+                run_test(config)
+                self.assertTrue(constructor.call_args.kwargs["independent_cascade_params"])
+            config["mode"] = "train"
+            config["train"]["resume_path"] = str(root / "out" / "model_last.pth")
+            with patch("train.EGMFNet", side_effect=small_model), self.assertRaisesRegex(ValueError, "sharing"):
+                train(config)
 
     def test_pairing_is_strict_and_all_documents_are_used(self):
         with tempfile.TemporaryDirectory() as folder:

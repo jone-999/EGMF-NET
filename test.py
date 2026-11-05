@@ -12,7 +12,7 @@ from torchvision.transforms import functional as TF
 from datasets.documentloader import image_files, axis_starts, normalize_image
 from evaluation.document_metrics import calculate_document_metrics
 from model import EGMFNet
-from utils.checkpoint import load_weights
+from utils.checkpoint import load_weights, cascade_config
 from utils.config import load_config, validate_config
 
 
@@ -34,13 +34,14 @@ def predict_page(model, image, full_size=512, tile_size=256, overlap=128, use_am
     current = image
     result = None
     for stage in range(model.stages):
+        stage_model = model.get_stage_model(stage)
         resized = F.interpolate(current, size=(full_size, full_size), mode="bilinear", align_corners=False)
         with torch.autocast(device_type=device.type, enabled=use_amp):
-            global_output = model.full_branch(resized)
+            global_output = stage_model.full_branch(resized)
         global_output = {key: F.interpolate(value.float(), size=(height, width), mode="bilinear", align_corners=False)
                          for key, value in global_output.items()}
         channels = {"bin_logits": 1, "enhanced_pred": 3, "pred_residual": 3,
-                    "decoder_feature": model.bin_gate_head.in_channels // 2}
+                    "decoder_feature": stage_model.bin_gate_head.in_channels // 2}
         local_output = {key: torch.zeros((1, count, height, width), device=device) for key, count in channels.items()}
         counts = torch.zeros((1, 1, height, width), device=device)
         for top in axis_starts(height, tile_size, tile_size - overlap):
@@ -49,7 +50,7 @@ def predict_page(model, image, full_size=512, tile_size=256, overlap=128, use_am
                 ph, pw = patch.shape[-2:]
                 patch = F.pad(patch, (0, tile_size - pw, 0, tile_size - ph), mode="replicate")
                 with torch.autocast(device_type=device.type, enabled=use_amp):
-                    output = model.patch_branch(patch)
+                    output = stage_model.patch_branch(patch)
                 window = blend_window(ph, pw, device)
                 for key in local_output:
                     local_output[key][:, :, top:top + ph, left:left + pw] += output[key][:, :, :ph, :pw].float() * window
@@ -58,7 +59,7 @@ def predict_page(model, image, full_size=512, tile_size=256, overlap=128, use_am
             raise RuntimeError("Local tiling left uncovered pixels")
         local_output = {key: value / counts for key, value in local_output.items()}
         with torch.autocast(device_type=device.type, enabled=use_amp):
-            logits, enhanced = model.fuse(global_output, local_output)
+            logits, enhanced = stage_model.fuse(global_output, local_output)
         result = {"probability": logits.float().sigmoid(), "enhanced": enhanced.float()}
         if stage + 1 < model.stages:
             current = enhanced.detach() * 2 - 1
@@ -71,7 +72,9 @@ def run_test(config):
     requested = runtime["device"]
     device = torch.device("cuda" if requested == "auto" and torch.cuda.is_available() else "cpu" if requested == "auto" else requested)
     checkpoint = torch.load(cfg["checkpoint_path"], map_location="cpu", weights_only=False)
-    model = EGMFNet().to(device)
+    architecture = cascade_config(checkpoint, config["model"])
+    model = EGMFNet(stages=architecture["dual_cascade_stages"],
+                    independent_cascade_params=architecture["independent_cascade_params"]).to(device)
     load_weights(model, checkpoint)
     model.eval()
     images = image_files(data["test_img_dir"])

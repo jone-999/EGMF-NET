@@ -6,6 +6,19 @@ import torch
 FORMAT = "egmf_gated_shared_v1"
 
 
+def cascade_config(checkpoint, fallback=None):
+    """Old release checkpoints had a fixed two-stage shared architecture."""
+    stored = checkpoint.get("config", {})
+    if "model" in stored:
+        return dict(stored["model"])
+    if checkpoint.get("format") == FORMAT:
+        return {"dual_cascade_stages": 2, "independent_cascade_params": False}
+    if "dual_cascade_stages" in stored:
+        return {"dual_cascade_stages": int(stored["dual_cascade_stages"]),
+                "independent_cascade_params": bool(stored.get("independent_cascade_params", False))}
+    return dict(fallback or {"dual_cascade_stages": 2, "independent_cascade_params": False})
+
+
 def capture_rng():
     state = {"python": random.getstate(), "numpy": np.random.get_state(), "torch": torch.get_rng_state()}
     if torch.cuda.is_available():

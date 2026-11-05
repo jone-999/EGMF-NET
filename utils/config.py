@@ -7,6 +7,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "conf.yml"
 SCHEMA = {
+    "model": {"dual_cascade_stages", "independent_cascade_params"},
     "data": {"train_img_dir", "train_gt_dir", "train_enhance_gt_dir", "test_img_dir", "test_gt_dir"},
     "train": {"save_dir", "resume_path", "batch_size", "max_epochs", "patch_size", "full_image_size",
               "patch_stride", "lr", "lr_end", "weight_decay", "augment", "save_every"},
@@ -20,13 +21,16 @@ def validate_config(config):
     if not isinstance(config, dict):
         raise ValueError("Configuration must be a mapping")
     if set(config) != set(SCHEMA) | {"mode"}:
-        raise ValueError("Required sections: mode, data, train, test, runtime")
+        raise ValueError("Required sections: mode, model, data, train, test, runtime")
     for section, keys in SCHEMA.items():
         if not isinstance(config[section], dict) or set(config[section]) != keys:
             raise ValueError(f"Invalid or missing {section} keys; expected: {sorted(keys)}")
     if config["mode"] not in {"train", "test"}:
         raise ValueError("mode must be train or test")
     train, test, runtime = (config[name] for name in ("train", "test", "runtime"))
+    stages = config["model"]["dual_cascade_stages"]
+    if type(stages) is not int or stages <= 0:
+        raise ValueError("model.dual_cascade_stages must be a positive integer")
     for section, key in (("train", "batch_size"), ("train", "max_epochs"), ("train", "patch_size"),
                          ("train", "full_image_size"), ("train", "patch_stride"), ("train", "save_every"),
                          ("test", "tile_size")):
@@ -51,7 +55,7 @@ def validate_config(config):
     test["binary_threshold"] = float(test["binary_threshold"])
     if not 0 <= test["binary_threshold"] <= 1:
         raise ValueError("binary_threshold must be in [0,1]")
-    for section, key in (("train", "augment"), ("runtime", "use_amp")):
+    for section, key in (("train", "augment"), ("runtime", "use_amp"), ("model", "independent_cascade_params")):
         if type(config[section][key]) is not bool:
             raise ValueError(f"{section}.{key} must be a YAML boolean")
     if type(runtime["num_workers"]) is not int or runtime["num_workers"] < 0:

@@ -1,6 +1,11 @@
 # Run python main.py. Set mode to train or test.
 mode: train
 
+model:
+  dual_cascade_stages: 2
+  # false: all stages share weights; true: each stage has its own weights.
+  independent_cascade_params: false
+
 data:
   train_img_dir: data/train/img
   train_gt_dir: data/train/gt

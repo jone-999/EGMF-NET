@@ -14,10 +14,22 @@
 ## 最终保留的结构
 
 RGB 输入 → 全局/局部 MSCAN 编码器 → 增强解码器与受增强特征引导的 EMCAD-Lite 二值解码器 → gated 融合。
-两阶段级联共享参数；阶段一的增强结果作为阶段二输入。上采样固定为双线性插值加 1×1 卷积。
+默认两阶段级联共享参数；阶段一的增强结果作为阶段二输入。上采样固定为双线性插值加 1×1 卷积。
 
-已经删除 conv、union、spatial_gate、residual_conv、token/axial bottleneck、独立级联参数、灰度增强和转置卷积等未采用选项。
-固定结构不再作为 conf 中的开关出现。模型为 12,758,948 个可训练参数。
+级联数和参数共享通过 `conf.yml` 配置：
+
+```yaml
+model:
+  dual_cascade_stages: 2
+  independent_cascade_params: false
+```
+
+`dual_cascade_stages` 是正整数，设为 1 表示单阶段；`false` 表示各阶段共享参数，`true` 表示各阶段独立参数。
+独立参数会增加参数量和内存开销。两阶段损失权重为 0.3/0.7，其他阶段数均匀加权。
+推理从检查点恢复级联设置；没有元信息的裸权重使用当前 YAML 设置。续训时不能改变级联数或共享方式。
+
+已经删除 conv、union、spatial_gate、residual_conv、token/axial bottleneck、灰度增强和转置卷积等未采用选项。
+其他固定结构不再作为 conf 中的开关出现。默认共享参数模型为 12,758,948 个可训练参数。
 
 ## 仅训练
 
@@ -47,7 +59,7 @@ RGB 输入 → 全局/局部 MSCAN 编码器 → 增强解码器与受增强特�
 ## 独立测试
 
 修改 `mode: test`，配置 `test.checkpoint_path`、`data.test_img_dir` 和 `test.save_dir`。
-测试原尺寸文档，使用全局缩放、局部重叠滑窗与两阶段 gated 融合。
+测试原尺寸文档，使用全局缩放、局部重叠滑窗与检查点记录的级联 gated 融合。
 
 有测试 GT 时单独输出 FM/pFM/PSNR/DRD；`data.test_gt_dir: ""` 时只预测，不计算指标。
 预测结果分为 `binary/`、`probability/`、`enhanced/`。

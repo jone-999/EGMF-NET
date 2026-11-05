@@ -1,4 +1,4 @@
-"""The final EGMF-NET: RGB, MSCAN, EMCAD-Lite, gated fusion, shared cascade."""
+"""The final EGMF-NET: RGB, MSCAN, EMCAD-Lite, gated fusion, configurable cascade."""
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -49,15 +49,31 @@ def crop_full_to_patch(tensor, crop_meta, patch_shape):
 
 
 class EGMFNet(nn.Module):
-    """Two global/local stages reuse the same branch and fusion parameters."""
-    stages = 2
+    """Global/local gated stages with shared or independent parameters."""
 
-    def __init__(self, base_channels=32, channels=(64, 128, 256, 256)):
+    def __init__(self, base_channels=32, channels=(64, 128, 256, 256), stages=2, independent_cascade_params=False):
         super().__init__()
+        if type(stages) is not int or stages <= 0:
+            raise ValueError("stages must be a positive integer")
+        if type(independent_cascade_params) is not bool:
+            raise ValueError("independent_cascade_params must be a boolean")
+        self.stages = stages
+        self.independent_cascade_params = independent_cascade_params
+        self.cascade_stage_models = None
+        if independent_cascade_params and stages > 1:
+            self.cascade_stage_models = nn.ModuleList(
+                EGMFNet(base_channels, channels, stages=1) for _ in range(stages)
+            )
+            return
         self.full_branch = Branch(base_channels, channels)
         self.patch_branch = Branch(base_channels, channels)
         self.bin_gate_head = nn.Conv2d(base_channels * 2, 2, 3, padding=1)
         self.enhance_gate_head = nn.Conv2d(base_channels * 2, 6, 3, padding=1)
+
+    def get_stage_model(self, index):
+        if not 0 <= index < self.stages:
+            raise IndexError("cascade stage index out of range")
+        return self if self.cascade_stage_models is None else self.cascade_stage_models[index]
 
     @staticmethod
     def _gated_mix(global_tensor, local_tensor, gate_logits):
@@ -75,11 +91,12 @@ class EGMFNet(nn.Module):
         current_full, current_patch = full_image, patch_image
         outputs = []
         for stage in range(self.stages):
-            full = self.full_branch(current_full)
-            local = self.patch_branch(current_patch)
+            stage_model = self.get_stage_model(stage)
+            full = stage_model.full_branch(current_full)
+            local = stage_model.patch_branch(current_patch)
             aligned = {key: crop_full_to_patch(value, crop_meta, patch_image.shape[-2:])
                        for key, value in full.items()}
-            logits, enhanced = self.fuse(aligned, local)
+            logits, enhanced = stage_model.fuse(aligned, local)
             outputs.append({"bin_logits": logits, "enhanced_pred": enhanced,
                             "full_logits": full["bin_logits"], "patch_logits": local["bin_logits"],
                             "full_enhanced": full["enhanced_pred"], "patch_enhanced": local["enhanced_pred"]})
@@ -90,7 +107,7 @@ class EGMFNet(nn.Module):
 
 
 def compute_loss(output, target, enhance_target, full_target, full_enhance_target):
-    """Original final loss weights; stage 1/2 contribute 0.3/0.7."""
+    """Two stages use 0.3/0.7 weights; other stage counts use equal weights."""
     def binary(logits, truth):
         return F.binary_cross_entropy_with_logits(logits.float(), truth.float()) + dice_loss_from_logits(logits, truth)
 
@@ -102,7 +119,9 @@ def compute_loss(output, target, enhance_target, full_target, full_enhance_targe
         enhancement_losses.append(0.3 * F.l1_loss(stage["enhanced_pred"].float(), enhance_target.float())
                                  + 0.1 * F.l1_loss(stage["full_enhanced"].float(), full_enhance_target.float())
                                  + 0.1 * F.l1_loss(stage["patch_enhanced"].float(), enhance_target.float()))
-    loss_bin = 0.3 * binary_losses[0] + 0.7 * binary_losses[1]
-    loss_enhance = 0.3 * enhancement_losses[0] + 0.7 * enhancement_losses[1]
+    count = len(binary_losses)
+    weights = [0.3, 0.7] if count == 2 else [1.0 / count] * count
+    loss_bin = sum(weight * loss for weight, loss in zip(weights, binary_losses))
+    loss_enhance = sum(weight * loss for weight, loss in zip(weights, enhancement_losses))
     return {"loss_total": loss_bin + loss_enhance,
             "loss_bin": loss_bin.detach(), "loss_enhance": loss_enhance.detach()}

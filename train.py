@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from datasets.documentloader import DocumentDataset, paired_documents
 from model import EGMFNet, compute_loss
-from utils.checkpoint import FORMAT, capture_rng, restore_rng
+from utils.checkpoint import FORMAT, capture_rng, restore_rng, cascade_config
 from utils.config import load_config, validate_config
 
 
@@ -73,7 +73,8 @@ def train(config):
     if not cfg["resume_path"] and output.exists() and any(output.iterdir()):
         raise FileExistsError("Training output is not empty; use train.resume_path or a new train.save_dir")
     output.mkdir(parents=True, exist_ok=True)
-    model = EGMFNet().to(device)
+    model = EGMFNet(stages=config["model"]["dual_cascade_stages"],
+                    independent_cascade_params=config["model"]["independent_cascade_params"]).to(device)
     initialize_weights(model)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
@@ -83,6 +84,8 @@ def train(config):
         checkpoint = torch.load(cfg["resume_path"], map_location="cpu", weights_only=False)
         if checkpoint.get("format") != FORMAT:
             raise ValueError("Resume requires a full checkpoint produced by this release")
+        if cascade_config(checkpoint) != config["model"]:
+            raise ValueError("Cannot change cascade stage count or parameter sharing during resume")
         if checkpoint["documents"] != manifest:
             raise ValueError("Resume training documents differ from the checkpoint")
         old = checkpoint["config"]["train"]
