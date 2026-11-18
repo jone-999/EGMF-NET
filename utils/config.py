@@ -1,4 +1,4 @@
-"""Configuration for the final fixed architecture; no validation/ablation options."""
+"""Load and check EGMF-NET configuration."""
 from copy import deepcopy
 from pathlib import Path
 import math
@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "conf.yml"
 SCHEMA = {
     "model": {"dual_cascade_stages", "independent_cascade_params"},
-    "data": {"train_img_dir", "train_gt_dir", "train_enhance_gt_dir", "test_img_dir", "test_gt_dir"},
+    "data": {"train_img_dir", "train_gt_dir", "train_enhance_gt_dir", "test_img_dir"},
     "train": {"save_dir", "resume_path", "batch_size", "max_epochs", "patch_size", "full_image_size",
               "patch_stride", "lr", "lr_end", "weight_decay", "augment", "save_every"},
     "test": {"checkpoint_path", "save_dir", "tile_size", "tile_overlap", "binary_threshold"},
@@ -22,6 +22,8 @@ def validate_config(config):
         raise ValueError("Configuration must be a mapping")
     if set(config) != set(SCHEMA) | {"mode"}:
         raise ValueError("Required sections: mode, model, data, train, test, runtime")
+    if isinstance(config["data"], dict):
+        config["data"].pop("test_gt_dir", None)
     for section, keys in SCHEMA.items():
         if not isinstance(config[section], dict) or set(config[section]) != keys:
             raise ValueError(f"Invalid or missing {section} keys; expected: {sorted(keys)}")

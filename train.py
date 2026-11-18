@@ -1,4 +1,4 @@
-"""Train on every supplied document. No validation split or metric selection."""
+"""Train EGMF-NET on the supplied documents."""
 import csv
 import json
 import math
@@ -105,7 +105,7 @@ def train(config):
                         num_workers=runtime["num_workers"], pin_memory=device.type == "cuda", generator=generator)
     (output / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
     (output / "training_documents.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    message = f"Training documents={len(pairs)} patches={len(dataset)} device={device}; fixed gated model, no validation"
+    message = f"Training documents={len(pairs)} patches={len(dataset)} device={device}"
     print(message)
     log_path = output / "log.txt"
     with log_path.open("a", encoding="utf-8") as handle:

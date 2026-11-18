@@ -1,7 +1,7 @@
 # EGMF-NET
 
 EGMF-NET uses gated fusion for document image enhancement and binarization,
-with separate training and testing entry points.
+with entry points for training and inference.
 
 [中文说明](README.zh-CN.md)
 
@@ -48,7 +48,6 @@ data/
     enhancement/    # RGB enhancement targets
   test/
     img/
-    gt/             # optional for prediction-only testing
 ```
 
 An image and its target files must have identical filename stems and dimensions.
@@ -59,7 +58,6 @@ Manually organize the data into separate training and test directories.
 
 Set `data.train_enhance_gt_dir: ""` to use the input RGB as the enhancement target.
 This trains RGB reconstruction.
-Set `data.test_gt_dir: ""` to predict without computing test metrics.
 
 ## Training
 
@@ -110,9 +108,9 @@ moments and random states are restored; the current configuration determines
 the cosine schedule and weight decay. Changing the total epoch count changes
 the future cosine schedule. Keep the checkpoint's cascade count and sharing settings when resuming.
 
-## Testing
+## Inference
 
-Set `mode: test`, `test.checkpoint_path` and the test data paths in `conf.yml`:
+Set `mode: test`, `test.checkpoint_path`, `data.test_img_dir` and `test.save_dir` in `conf.yml`:
 
 ```bash
 python main.py
@@ -120,14 +118,13 @@ python main.py
 python test.py
 ```
 
-Testing processes native-size pages with a resized global view and overlapping
+Inference processes native-size pages with a resized global view and overlapping
 local tiles. The stage count and parameter sharing are restored from checkpoint metadata.
 For a raw state dictionary without metadata, the current YAML cascade settings are used.
 `test.binary_threshold` controls the final foreground decision.
 
-Outputs are saved under `test.save_dir/binary`, `probability` and `enhanced`.
-If GT is supplied, `metrics.csv` reports per-document FM, pFM, PSNR and DRD;
-`metrics.json` contains their document means.
+Inference requires only the input images and model weights. Outputs are saved
+under `test.save_dir/binary`, `probability` and `enhanced`.
 
 Original final **gated/shared/RGB/interpolate** state dictionaries can be loaded
 for inference. Four tensors from the original unused conv-fusion heads are
@@ -138,27 +135,12 @@ checkpoints cannot be resumed because the unused parameters have been removed.
 
 ```text
 main.py                       # default conf.yml entry point
-conf.yml                      # training/testing configuration
-train.py                      # training only
-test.py                       # independent native-page testing
+conf.yml                      # training and inference configuration
+train.py                      # training
+test.py                       # full-page inference
 model/egmf_net.py              # final gated network and losses
 model/blocks.py                # MSCAN / EMCAD-Lite components
 datasets/documentloader.py     # pairing, global resizing, local crops
-evaluation/document_metrics.py # test metrics only
 utils/config.py               # strict configuration and paths
 utils/checkpoint.py           # random states and weight loading
-tests/test_release.py          # regression tests
 ```
-
-## Verification
-
-```bash
-python -B -m unittest discover -s tests -v
-```
-
-Tests cover complete training data usage, strict pairing, rejected obsolete
-configuration, gradient coverage, training/resume equivalence and separate
-testing. During release preparation, both cascade-stage outputs, loss values and
-native-page tiled inference were compared with the original selected gated code.
-They matched with the same input tensors and weights. Verification used synthetic
-inputs on CPU; resume equivalence was checked with zero data-loader workers.

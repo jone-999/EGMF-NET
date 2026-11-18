@@ -40,7 +40,7 @@ class ReleaseTests(unittest.TestCase):
         config = load_config()
         config["data"].update(train_img_dir=str(root / "img"), train_gt_dir=str(root / "gt"),
                               train_enhance_gt_dir=str(root / "enhancement"),
-                              test_img_dir=str(root / "img"), test_gt_dir=str(root / "gt"))
+                              test_img_dir=str(root / "img"))
         config["train"].update(save_dir=str(root / "out"), batch_size=1, max_epochs=2,
                                patch_size=32, full_image_size=64, patch_stride=32, save_every=1)
         config["test"].update(save_dir=str(root / "pred"), tile_size=32, tile_overlap=16)
@@ -172,10 +172,13 @@ class ReleaseTests(unittest.TestCase):
             test_config = deepcopy(config)
             test_config["mode"] = "test"
             test_config["test"]["checkpoint_path"] = str(out / "model_last.pth")
+            test_config["data"]["test_gt_dir"] = str(root / "missing_test_gt")
             with patch("test.EGMFNet", side_effect=small_model):
                 run_test(test_config)
-            self.assertEqual(len(list((root / "pred" / "binary").glob("*.png"))), 2)
-            self.assertTrue((root / "pred" / "metrics.csv").exists())
+            prediction_dir = root / "pred"
+            self.assertEqual({path.name for path in prediction_dir.iterdir()}, {"binary", "probability", "enhanced"})
+            for subdir in ("binary", "probability", "enhanced"):
+                self.assertEqual(len(list((prediction_dir / subdir).glob("*.png"))), 2)
 
 
 if __name__ == "__main__":

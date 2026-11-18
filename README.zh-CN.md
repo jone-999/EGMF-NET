@@ -1,12 +1,12 @@
 # EGMF-NET
 
-EGMF-NET 使用 gated 融合进行文档图像增强与二值化，提供独立的训练和测试入口。
+EGMF-NET 使用 gated 融合进行文档图像增强与二值化，提供训练和推理入口。
 
 ## 运行方法
 
 1. 安装依赖：`pip install -r requirements.txt`。
-2. 在根目录 `conf.yml` 填写图像、二值 GT 和 RGB 增强 GT 路径。
-3. `mode: train` 表示训练，`mode: test` 表示独立测试。
+2. 在根目录 `conf.yml` 填写当前模式所需的路径。训练配置图像和 GT 路径，推理配置图像和权重路径。
+3. `mode: train` 表示训练，`mode: test` 表示推理。
 4. 直接运行 `python main.py`，也可在 IDE 直接运行主函数。
 
 相对数据路径、输出路径均相对项目根目录解析。
@@ -54,21 +54,12 @@ model:
 输出目录包含 `model_last.pth`、`model_epochNNN.pth`、训练损失 CSV/曲线、实际配置和训练文件清单。
 两种权重文件均按 `save_every` 间隔及末轮保存，`model_last.pth` 指向最近一次保存的断点。
 
-## 独立测试
+## 推理
 
 修改 `mode: test`，配置 `test.checkpoint_path`、`data.test_img_dir` 和 `test.save_dir`。
-测试原尺寸文档，使用全局缩放、局部重叠滑窗与检查点记录的级联 gated 融合。
-
-有测试 GT 时单独输出 FM/pFM/PSNR/DRD；`data.test_gt_dir: ""` 时只预测，不计算指标。
-预测结果分为 `binary/`、`probability/`、`enhanced/`。
+推理使用全局缩放、局部重叠滑窗与级联 gated 融合，在原图尺寸上保存二值图、概率图和增强图，分别位于 `binary/`、`probability/`、`enhanced/`。
 
 原最终 gated/shared/RGB/interpolate 权重可以严格加载推理，仅移除原来未参与 gated 路径的两组 conv 融合层权重。
 由于移除了未使用参数，旧版完整训练断点不能直接用于发布版续训；发布版断点可正常续训。
-
-## 验证
-
-运行 `python -B -m unittest discover -s tests -v`。
-测试覆盖参数梯度、训练数据加载、CPU 零 worker 续训与连续训练逐值一致，以及训练和独立测试流程。
-对照原始代码，同权重下两阶段输出、损失及原尺寸滑窗推理结果一致。
 
 完整结构和损失权重见 [英文 README](README.md)。

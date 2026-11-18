@@ -12,8 +12,6 @@ data:
   # RGB enhancement targets with matching filenames. Empty uses the input RGB.
   train_enhance_gt_dir: data/train/enhancement
   test_img_dir: data/test/img
-  # Empty permits prediction without reporting test metrics.
-  test_gt_dir: data/test/gt
 
 train:
   save_dir: checkpoints/egmf_gated
