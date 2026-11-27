@@ -107,7 +107,7 @@ class EGMFNet(nn.Module):
 
 
 def compute_loss(output, target, enhance_target, full_target, full_enhance_target):
-    """Two stages use 0.3/0.7 weights; other stage counts use equal weights."""
+    """Weight all cascade stages equally."""
     def binary(logits, truth):
         return F.binary_cross_entropy_with_logits(logits.float(), truth.float()) + dice_loss_from_logits(logits, truth)
 
@@ -120,7 +120,7 @@ def compute_loss(output, target, enhance_target, full_target, full_enhance_targe
                                  + 0.1 * F.l1_loss(stage["full_enhanced"].float(), full_enhance_target.float())
                                  + 0.1 * F.l1_loss(stage["patch_enhanced"].float(), enhance_target.float()))
     count = len(binary_losses)
-    weights = [0.3, 0.7] if count == 2 else [1.0 / count] * count
+    weights = [1.0 / count] * count
     loss_bin = sum(weight * loss for weight, loss in zip(weights, binary_losses))
     loss_enhance = sum(weight * loss for weight, loss in zip(weights, enhancement_losses))
     return {"loss_total": loss_bin + loss_enhance,

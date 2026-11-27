@@ -85,7 +85,7 @@ Per-stage loss is:
 + 0.3 × L1(enhanced_fused) + 0.1 × L1(enhanced_global) + 0.1 × L1(enhanced_local)
 ```
 
-`binary = BCEWithLogits + Dice`; two cascade stages are weighted 0.3/0.7.
+`binary = BCEWithLogits + Dice`. With two cascade stages, each stage has a weight of 0.5.
 Other stage counts use equal stage weights. Loss coefficients are fixed in the model code.
 
 Outputs in `train.save_dir`:
